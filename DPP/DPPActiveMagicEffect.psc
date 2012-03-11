@@ -3,31 +3,39 @@ scriptname DPPActiveMagicEffect extends ActiveMagicEffect
 DPPQuestScript property DPPQuest auto
 
 event OnEffectStart( Actor akTarget, Actor akCaster )
-	Debug.Trace( "DiscreetPoisonedPerk: " + Self + " started on " + akTarget )
+	Debug.Trace( "DPP::ActiveMagicEffect::OnEffectStart: " + Self + " started on " + akTarget + ", caster: " + akCaster )
+	
+	if( akCaster == Game.GetPlayer() && akCaster.IsDetectedBy( akTarget ) )
+		Debug.Trace( "DPP::ActiveMagicEffect::OnEffectFinish: target sees player, do nothing" )
+		return
+	endif
+	
+	DPPPoisonTargetAlias poisonTarget = DPPQuest.GetPoisonedTarget( akTarget )
+	
+	if( poisonTarget != None && poisonTarget.SizePoisonItem() > 0 )
+		poisonTarget.AddPoisonEffect( Self )
+		Debug.Trace( "DPP::ActiveMagicEffect::OnEffectStart: Added " + Self + " to poison effect tally" )
+	endif
 endevent
 
 event OnEffectFinish( Actor akTarget, Actor akCaster )
-	Debug.Trace( "DiscreetPoisonedPerk: " + Self + " finished on " + akTarget )
+	Debug.Trace( "DPP::ActiveMagicEffect::OnEffectFinish: " + Self + " finished on " + akTarget )
 	
-	; See if we were a poisoned target
-	DPPPoisonTargetAlias poisonedSelf = DPPQuest.GetPoisonedTarget( akTarget )
-	if( poisonedSelf != None )
-		Debug.Trace( "DiscreetPoisonedPerk: " + akTarget + " was on poisoned targets list " )
-		; and if the effect that wore off matches our poison
-		int i = 0
-		
-		while( i < DPPQuest.PoisonEffects.Length )
-			if( DPPQuest.PoisonEffects[i] == GetBaseObject() )
-				; TODO: I'm fairly certain this logic will fail if we pickpocket 
-				; more than one different HP poisons and the last one wears off
-				; before
-				
-				Debug.Trace( "DiscreetPoisonedPerk: effect matches poison effect " + GetBaseObject() )
+	int targetHP = akTarget.GetActorValue( "Health" ) as int
+	if( targetHP <= 0 )
+		Debug.Trace( "DPP::ActiveMagicEffect::OnEffectFinish: target is dead, do nothing" )
+		return
+	endif
+	
+	DPPPoisonTargetAlias poisonTarget = DPPQuest.GetPoisonedTarget( akTarget )
+	
+	if( poisonTarget != None )
+		if( poisonTarget.RemovePoisonEffect( Self ) )
+			Debug.Trace( "DPP::ActiveMagicEffect::OnEffectFinish: Removed " + Self + " from poison effect tally" )
+			if( poisonTarget.SizePoisonEffect() == 0 )
+				Debug.Trace( "DPP::ActiveMagicEffect::OnEffectFinish: Removed " + akTarget + " from poison targets" )
 				DPPQuest.RemovePoisonedTarget( akTarget )
-				return
 			endif
-			
-			i += 1
-		endwhile
+		endif
 	endif
 endevent

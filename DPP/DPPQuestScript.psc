@@ -1,35 +1,43 @@
 scriptname DPPQuestScript extends Quest
 
 Faction property NoCrimeFaction auto
-DPPPickpocketTargetAlias property PickpocketTarget auto
-FormList property PickpocketPoisons auto
 
 DPPPoisonTargetAlias[] property PoisonTargets auto
 
-MagicEffect[] property PoisonEffects auto
+event OnReset()
+	Debug.Trace( "DPP::Quest::OnReset" )
+endevent
 
-; Pickpocket Target management
-function SetPickpocketTarget( ObjectReference akTarget )
-	Debug.Trace( "DiscreetPoisonedPerk: setting PickpocketTarget ref to " + akTarget )
-	PickpocketTarget.ForceRefTo( akTarget )
-	PickpocketTarget.RegisterForSingleUpdate( 0.001 )
+event OnInit()
+	Debug.Trace( "DPP::Quest::OnInit" )
+	int i = 0
 	
-	Utility.Wait( 0.001 ) ; Wait until menu closes
-	
-	Debug.Trace( "DiscreetPoisonedPerk: Menu wait done"  )
-	if( PickpocketPoisons.GetSize() > 0 )
-		Debug.Trace( "DiscreetPoisonedPerk: Poison(s) were added, watching new effects"  )
-		PickpocketPoisons.Revert()
+	while( i < PoisonTargets.Length )	
+		PoisonTargets[i].InitPoisonItem()
+		PoisonTargets[i].InitPoisonEffect()
 		
-		;PickpocketTarget.WasPoisoned = true
-		;AddPoisonedTarget( akTarget )
-	endif
-endfunction
+		i += 1
+	endwhile
+endevent
 
-function ClearPickpocketTarget()
-	Debug.Trace( "DiscreetPoisonedPerk: clearing PickpocketTarget ref " + PickpocketTarget.GetActorRef() )
-	PickpocketTarget.Clear()
-	PickpocketPoisons.Revert()
+; Initial target pickpocket window
+; Only magic effects applied during this time will be counted
+function SetPickpocketTarget( ObjectReference akTarget )
+	Debug.Trace( "DPP::Quest::SetPickpocketTarget: setting PickpocketTarget ref to " + akTarget )
+	DPPPoisonTargetAlias poisonTarget = AddPoisonedTarget( akTarget )
+	; "wake up" detection, however the hell this junk works
+	Game.GetPlayer().IsDetectedBy( akTarget as Actor )
+	
+	Utility.Wait( 0.2 ) ; Wait until menu closes and effects are applied
+	Debug.Trace( "DPP::Quest::SetPickpocketTarget: Menu wait done, clearing poison items"  )
+	
+	; Clear poison items so any other new effects don't get discounted as valid
+	; poisons
+	poisonTarget.ClearPoisonItem()
+	if( poisonTarget.SizePoisonEffect() == 0 )
+		RemovePoisonedTarget( akTarget )
+		Debug.Trace( "DPP::Quest::SetPickpocketTarget: Did not poison target, clearing it" )
+	endif
 endfunction
 
 ; Poisoned Target management
@@ -37,19 +45,21 @@ DPPPoisonTargetAlias function AddPoisonedTarget( ObjectReference akTarget )
 	int i = 0
 	
 	while( i < PoisonTargets.Length )
-		if( PoisonTargets[i].GetRef() == akTarget )
-			return PoisonTargets[i]
+		if( PoisonTargets[ i ].GetRef() == akTarget )
+			Debug.Trace( "DPP::Quest::AddPoisonedTarget: reusing existing target index " + i )
+			return PoisonTargets[ i ]
 		endif
 		
-		if( PoisonTargets[i].GetRef() == None )
-			PoisonTargets[i].ForceRefTo( akTarget )
-			return PoisonTargets[i]
+		if( PoisonTargets[ i ].GetRef() == None )
+			PoisonTargets[ i ].ForceRefTo( akTarget )
+			Debug.Trace( "DPP::Quest::AddPoisonedTarget: using free target index " + i )
+			return PoisonTargets[ i ]
 		endif
 		
 		i += 1
 	endwhile
 	
-	Debug.Trace( "DiscreetPoisonedPerk: Ran out of PoisonTargets when trying to add " + akTarget )
+	Debug.Trace( "DPP::QuestAddPoisonedTarget: Ran out of PoisonTargets when trying to add " + akTarget )
 	return None
 endfunction
 
@@ -57,22 +67,24 @@ function RemovePoisonedTarget( ObjectReference akTarget )
 	int i = 0
 	
 	while( i < PoisonTargets.Length )
-		if( PoisonTargets[i].GetRef() == akTarget )
-			PoisonTargets[i].Clear()
+		if( PoisonTargets[ i ].GetRef() == akTarget )
+			PoisonTargets[ i ].Clear()
+			PoisonTargets[ i ].ClearPoisonEffect()
+			PoisonTargets[ i ].ClearPoisonItem() ; should not necessary, but just in case
 			return
 		endif
 		
 		i += 1
 	endwhile
 	
-	Debug.Trace( "DiscreetPoisonedPerk: Could not find " + akTarget + " in PoisonTargets for removal" )
+	Debug.Trace( "DPP::Quest::RemovePoisonedTarget: Could not find " + akTarget + " in PoisonTargets for removal" )
 endfunction
 
 bool function IsPoisonedTarget( ObjectReference akTarget )
 	int i = 0
 	
 	while( i < PoisonTargets.Length )
-		if( PoisonTargets[i].GetRef() == akTarget )
+		if( PoisonTargets[ i ].GetRef() == akTarget )
 			return true
 		endif
 		
@@ -86,8 +98,8 @@ DPPPoisonTargetAlias function GetPoisonedTarget( ObjectReference akTarget )
 	int i = 0
 	
 	while( i < PoisonTargets.Length )
-		if( PoisonTargets[i].GetRef() == akTarget )
-			return PoisonTargets[i]
+		if( PoisonTargets[ i ].GetRef() == akTarget )
+			return PoisonTargets[ i ]
 		endif
 		
 		i += 1
@@ -95,3 +107,4 @@ DPPPoisonTargetAlias function GetPoisonedTarget( ObjectReference akTarget )
 	
 	return None
 endfunction
+
